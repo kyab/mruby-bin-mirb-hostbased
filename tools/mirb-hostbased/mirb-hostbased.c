@@ -135,6 +135,7 @@ struct _args {
   int argc;
   char** argv;
   const char *port;
+  int noreset;
 };
 
 static void
@@ -143,6 +144,7 @@ usage(const char *name)
   static const char *const usage_msg[] = {
   "switches:",
   "-v           print version number, then run in verbose mode",
+  "--noreset    continue without wait HELLO. Local variables will not be shared",
   "--verbose    run in verbose mode",
   "--version    print the version",
   "--copyright  print the copyright",
@@ -179,6 +181,9 @@ parse_args(mrb_state *mrb, int argc, char **argv, struct _args *args)
       if (strcmp((*argv) + 2, "version") == 0) {
         mrb_show_version(mrb);
         exit(EXIT_SUCCESS);
+      }else if (strcmp((*argv)+2, "noreset") == 0){
+        args->noreset = 1;
+        break;
       }
       /*
       else if (strcmp((*argv) + 2, "verbose") == 0) {
@@ -421,13 +426,17 @@ main(int argc, char **argv)
   tcflush(fd_port, TCIFLUSH);
   tcsetattr(fd_port,TCSANOW, &newtio);
 
-  printf("  waiting for target on %s...\n", args.port);
-  fflush(stdout);
-  int ret = wait_hello(fd_port);
-  if (ret != 0){
-    printf("\nfailed to open communication with target.\n");
-    cleanup(mrb, &args);
-    return EXIT_FAILURE;
+  if (!args.noreset){
+    printf("  waiting for target on %s...\n", args.port);
+    fflush(stdout);
+    int ret = wait_hello(fd_port);
+    if (ret != 0){
+      printf("\nfailed to open communication with target.\n");
+      cleanup(mrb, &args);
+      return EXIT_FAILURE;
+    }
+  }else{
+    printf("  continue without reset\n");
   }
   printf("target is ready.\n");
 
@@ -468,6 +477,64 @@ main(int argc, char **argv)
       }
       else{
         /* count the quit/exit commands as strings if in a quote block */
+        strcat(ruby_code, "\n");
+        strcat(ruby_code, last_code_line);
+      }
+    }else if (strncmp(last_code_line,"#file",strlen("#file")) == 0){
+      if (!code_block_open) {
+        char *filename = last_code_line + strlen("#file");
+
+        //strip space
+        while(filename[0] == ' ' || filename[0] == '\t' || filename[0] == '"'){
+          filename++;
+        }
+        while(filename[strlen(filename)-1] == ' ' || filename[strlen(filename)-1] == '\t' ||
+              filename[strlen(filename)-1] == '"'){
+          filename[strlen(filename)-1] = '\0';
+        }
+
+        FILE *f = fopen(filename, "r");
+        if (!f){
+          printf("cannot open file:%s\n",filename);
+          continue;
+        }
+        char line[1024];
+        while(fgets(line, 1024, f) != NULL){
+          char c = line[0];
+          int is_comment_line = 0;
+          //
+          while(TRUE){
+            if(c == '#') {
+              is_comment_line = 1;
+              break;
+            }else if (c == '\n') {
+              break;
+            }else if (c == ' ' || c == '\t'){
+              c++;
+              continue;
+            }else{
+              break;
+            }
+          }
+          if (!is_comment_line)
+            strcat(ruby_code, line);
+        }
+        fclose(f);
+        
+        //remove '\n' or spaces from last line to prevent code_block_open
+        while(TRUE){
+          char last_char = ruby_code[strlen(ruby_code)-1];
+          if (last_char == '\n' || last_char == ' ' || last_char == '\t'){
+            ruby_code[strlen(ruby_code)-1] = '\0';
+            continue;
+          }
+          break;
+        }
+
+
+      }
+      else{
+        /* count the #file commands as strings if in a quote block */
         strcat(ruby_code, "\n");
         strcat(ruby_code, last_code_line);
       }

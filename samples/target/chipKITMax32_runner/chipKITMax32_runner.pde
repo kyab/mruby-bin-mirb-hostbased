@@ -201,9 +201,10 @@ void loop(){
       writeResult(RSTRING_PTR(result), exeption_on_run);
     }
 
-  	result = mrb_nil_value();	//meaningless??
-  	// mrb_garbage_collect(mrb);
-    mrb_gc_arena_restore(mrb, ai);
+  	//result = mrb_nil_value();	//meaningless??
+    mrb_gc_mark_value(mrb,result);  //??
+  	mrb_garbage_collect(mrb);      //??
+    mrb_gc_arena_restore(mrb, ai);  //??
 
   }
   delay(10);
