@@ -4,12 +4,14 @@ mruby-bin-mirb-hostbased is mrbgem which allows hostbased irb with mruby.
 Compiled executable "mirb-hostbased" is simular to mirb, but mirb-hostbased
 works with target board via serial communication.
 
+## How it works
 As name "hostbased" implies, mirb-hostbased does not send user input directly to
 target board, rather, it compiles user input into bytecode on host machine, then send bytecode via serial.
 
 Target boards should handle received bytecode, then send result back to host.
 Sample sketch for chipKIT Max32 (and maybe for Arduino Due) is in samples/target.
 
+![Hostbased mirb](https://cacoo.com/diagrams/EmmKpYRK6YEvRwcE-44F09.png)
 
 # Build
 ## Host side:
@@ -21,10 +23,10 @@ conf.gem :github => 'kyab/mruby-bin-mirb-hostbased', :branch => 'master'
 
 ## Target side:
 If your board is Arduino compatible, compile and upload sample sketch file in samples/target by your IDE(MPIDE,etc).
-I also recommend you to use my [mruby-arduino].
+I also recommend you to use my [mruby-arduino](https://github.com/kyab/mruby-arduino).
 
 ```
-conf.gem :git => "https://github.com/kyab/mruby-arduino.git", :branch => "master"
+conf.gem :github => "kyab/mruby-arduino.git", :branch => "master"
 ```
 
 # Usage
