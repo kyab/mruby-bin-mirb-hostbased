@@ -228,6 +228,19 @@ int
 wait_hello(int fd){
 
   //TODO : introduce some timeout functionality. 
+
+  const char SOH = 0x01;
+  char c;
+  while(1){
+    size_t read_size = read(fd, &c, 1);
+    if (read_size != 1) {
+      perror("read error");
+      return -1;
+    }
+    if (c == SOH) break;
+    putc(c, stdout);
+  }
+
   char message[128];
   ssize_t len_readed = 0;
 
@@ -238,7 +251,7 @@ wait_hello(int fd){
       printf("<EOF>\n");
       return -1;
     }else if (read_size < 0){
-      perror("read error\n");
+      perror("read error");
       return -1;
     }
     memcpy(message + len_readed, buffer, read_size);
@@ -408,7 +421,7 @@ main(int argc, char **argv)
   tcflush(fd_port, TCIFLUSH);
   tcsetattr(fd_port,TCSANOW, &newtio);
 
-  printf("  waiting for target on %s...", args.port);
+  printf("  waiting for target on %s...\n", args.port);
   fflush(stdout);
   int ret = wait_hello(fd_port);
   if (ret != 0){
@@ -416,7 +429,7 @@ main(int argc, char **argv)
     cleanup(mrb, &args);
     return EXIT_FAILURE;
   }
-  printf("\n");
+  printf("target is ready.\n");
 
   cxt = mrbc_context_new(mrb);
   cxt->capture_errors = 1;
