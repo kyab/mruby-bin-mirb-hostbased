@@ -25,6 +25,8 @@
 #endif
 #include <mruby/string.h>
 
+static const char *history_file = ".mirb-hostbased_history";
+char history_path[1024];
 
 /* Guess if the user might want to enter more
  * or if he wants an evaluation of his code now */
@@ -445,6 +447,15 @@ main(int argc, char **argv)
   if (args.verbose) cxt->dump_result = 1;
 
   ai = mrb_gc_arena_save(mrb);
+
+#ifdef ENABLE_READLINE
+  using_history();
+  strcpy(history_path, getenv("HOME"));
+  strcat(history_path, "/");
+  strcat(history_path,history_file);
+  read_history(history_path);
+#endif
+
   while (TRUE) {
 #ifndef ENABLE_READLINE
     print_cmdline(code_block_open);
@@ -468,6 +479,7 @@ main(int argc, char **argv)
     }
     strncpy(last_code_line, line, sizeof(last_code_line)-1);
     add_history(line);
+
     free(line);
 #endif
 
@@ -568,9 +580,13 @@ main(int argc, char **argv)
       else {
         /* generate bytecode */
         n = mrb_generate_code(mrb, parser);
-        FILE *f = fopen(".mirb-serial.bytecode.mrb","w+b");
+
+        char mrbpath[1024];
+        strcpy(mrbpath,getenv("HOME"));
+        strcat(mrbpath,"/.mirb-hostbased.mrb");
+        FILE *f = fopen( mrbpath ,"w+b");
         if (!f){
-          perror("failed to dump bytecode(file open error).\n");
+          perror("failed to dump bytecode(file open error).");
         }
 
         /* dump bytecode to file */
@@ -584,7 +600,7 @@ main(int argc, char **argv)
         fseek(f, 0, SEEK_SET);
         size_t bytecode_size = fread(bytecode, 1, 2048,f);
         if (ferror(f)){
-          perror("file read error.\n");
+          perror("file read error.");
         }
         //printf("bytecode size = %zd\n",bytecode_size);
         
@@ -618,6 +634,8 @@ main(int argc, char **argv)
   }
   mrbc_context_free(mrb, cxt);
   mrb_close(mrb);
+
+  write_history(history_path);
 
   return 0;
 }
