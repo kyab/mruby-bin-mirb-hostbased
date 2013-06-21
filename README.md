@@ -4,6 +4,9 @@ mruby-bin-mirb-hostbased is mrbgem which allows hostbased irb with mruby.
 Compiled executable "mirb-hostbased" is simular to mirb, but mirb-hostbased
 works with target board via serial communication.
 
+## Demo
+ http://www.youtube.com/watch?v=e8gTTSdxlPU
+ 
 ## How it works
 As name "hostbased" implies, mirb-hostbased does not send user input directly to
 target board, rather, it compiles user input into bytecode on host machine, then send bytecode via serial.
