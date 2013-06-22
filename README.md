@@ -44,6 +44,78 @@ Example:
 ```
 
 Once prompt ">" is displayed, your target is ready. Enter any ruby code like mirb.
+```
+mirb-hostbased -p /dev/cu.usbserial-A600CKP6 
+mirb-hostbased - Hostbased Interactive mruby Shell
+  waiting for target on /dev/cu.usbserial-A600CKP6...
+(taget):TOTAL_ALLOCATED : 83297
+target is ready.
+> 1+1
+ => 2
+> "mruby".upcase.reverse
+ => YBURM
+> exit
+```
+
+## Loading file
+You can use #file special command to read *.rb files.
+
+test.rb
+```
+def square_add(a,b)
+  a*a + b*b
+end
+puts "test.rb loaded into target"
+```
+
+mirb-hostbased:
+```
+> #file /path/to/test.rb
+test.rb loaded into target
+ => nil
+> square_add(2,3)
+ => 25
+```
+
+## Reconnect without reset
+You can reconnect to serial(usb-serial) without reset. 
+With --noreset option, mirb-hostbased does not wait for target to send HELLO.
+
+```
+ mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
+ >
+```
+note: You cannot reuse local variable in previous mirb-hostbased session.
+
+###For Arduino boards:
+Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use --noreset option,
+you have to disable auto-reset temporarily. 
+I recommend to use capacitor hack introduced bellow.
+http://electronics.stackexchange.com/questions/24743/arduino-resetting-while-reconnecting-the-serial-terminal.
+
+Your sessions would be like.
+```
+(Arduino is default and self-powered: auto-reset enabled.)
+mirb-hostbased -p /dev/cu.usbserial-A600CKP6
+> def foo
+*   puts "foo"
+* end
+ => nil
+> $global = 99
+ => 99
+> exit
+(Disconnect USB.)
+...
+(Connect capacitor between RESET and GND on board. auto-reset disabled.)
+(Reconnect USB)
+mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
+> foo
+foo
+ => nil
+> $global
+ => 99
+
+```#file``` command and ```--noreset``` options will provide you rapid try-and-test cycle.
 
 # Note
 For detailed information about how to compile mruby for chipKIT Max32, check my blog post.
