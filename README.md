@@ -58,7 +58,7 @@ target is ready.
 ```
 
 ## Loading file
-You can use #file special command to read *.rb files.
+You can use ```#file``` special command to read *.rb files.
 
 test.rb
 ```
@@ -79,16 +79,16 @@ test.rb loaded into target
 
 ## Reconnect without reset
 You can reconnect to serial(usb-serial) without reset. 
-With --noreset option, mirb-hostbased does not wait for target to send HELLO.
+With ```--noreset``` option, mirb-hostbased does not wait for target to send HELLO.
 
 ```
  mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
  >
 ```
-note: You cannot reuse local variable in previous mirb-hostbased session. #reconnect command will solve the problem in future.
+note: You cannot reuse local variable in previous mirb-hostbased session. ```#reconnect``` command will solve the problem in future.
 
 ###For Arduino boards:
-Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use --noreset option,
+Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use ```--noreset``` option,
 you have to disable auto-reset temporarily. 
 I recommend to use capacitor hack introduced bellow.
 http://electronics.stackexchange.com/questions/24743/arduino-resetting-while-reconnecting-the-serial-terminal.
@@ -116,7 +116,7 @@ foo
  => 99
 ```
 
-```#file``` command and ```--noreset``` options will provide you rapid try-and-test cycle.
+```#file``` command and ```--noreset``` option provide you rapid try-and-test cycle.
 
 # Note
 For detailed information about how to compile mruby for chipKIT Max32, check my blog post.
