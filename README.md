@@ -114,6 +114,7 @@ foo
  => nil
 > $global
  => 99
+```
 
 ```#file``` command and ```--noreset``` options will provide you rapid try-and-test cycle.
 
