@@ -85,7 +85,7 @@ With --noreset option, mirb-hostbased does not wait for target to send HELLO.
  mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
  >
 ```
-note: You cannot reuse local variable in previous mirb-hostbased session.
+note: You cannot reuse local variable in previous mirb-hostbased session. #reconnect command will solve the problem in future.
 
 ###For Arduino boards:
 Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use --noreset option,
