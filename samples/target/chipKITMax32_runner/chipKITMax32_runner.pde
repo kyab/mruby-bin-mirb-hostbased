@@ -30,7 +30,7 @@ extern "C"
 }
 #endif
 
-//for Arduino Dur It looks like stdout is already redirected to the programming port UART on the due
+//for Arduino Due It looks like stdout is already redirected to the programming port UART on the due
 //http://forum.arduino.cc/index.php/topic,148289.0.html
 
 
@@ -47,7 +47,7 @@ void __dummy(){
 }
 
 void reportMem(){
-	char str[10];
+	char str[15];
 	itoa(total_allocated_mem, str, 10);
 	Serial.print("(taget):TOTAL_ALLOCATED : ");
 	Serial.println(str);
@@ -63,8 +63,8 @@ void *myallocf(mrb_state *mrb, void *p, size_t size, void *ud){
     void *ret = realloc(p, size);
 
     if(!ret){
-      char str[8];
-      itoa(size, str, 8);
+      char str[15];
+      itoa(size, str, 10);
       Serial.print("(target):allocation error. requested size = ");
       Serial.println(str);
       reportMem();
@@ -147,7 +147,6 @@ void setup(){
   mrb = mrb_open_allocf(myallocf, NULL);
   ai = mrb_gc_arena_save(mrb);
 
- 
   reportMem();
 
   //send HELLO message 
