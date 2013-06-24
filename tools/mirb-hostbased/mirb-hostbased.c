@@ -7,6 +7,7 @@
 */
 
 #include <stdlib.h>
+#include <errno.h>
 #include <string.h>
 
 #include <unistd.h>
@@ -24,6 +25,10 @@
 #include <readline/history.h>
 #endif
 #include <mruby/string.h>
+
+//DEBUG PRINT
+//http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
+#define DPRINTF(...) if (args.verbose) printf(__VA_ARGS__)
 
 static const char *history_file = ".mirb-hostbased_history";
 char history_path[1024];
@@ -187,11 +192,10 @@ parse_args(mrb_state *mrb, int argc, char **argv, struct _args *args)
         args->noreset = 1;
         break;
       }
-      /*
       else if (strcmp((*argv) + 2, "verbose") == 0) {
         args->verbose = 1;
         break;
-      }
+      }/*
       else if (strcmp((*argv) + 2, "copyright") == 0) {
         mrb_show_copyright(mrb);
         exit(EXIT_SUCCESS);
@@ -331,10 +335,12 @@ write_error:
   return -1;
 }
 
-int write_bytecode(int fd, const void *buffer, int len){
+int write_bytecode(int fd, const void *buffer, int len, int verbose){
+
+  ssize_t read_size;
 
   unsigned char header[3];
-  header[0] = 0x01; //SOH
+  header[0] = verbose ? 0x02 : 0x01; //1:SOH 2:SOH with verbose
   header[1] = (unsigned char)(len >> 8);
   header[2] = (unsigned char)(len & 0xFF);
 
@@ -345,7 +351,7 @@ int write_bytecode(int fd, const void *buffer, int len){
   }
 
   char ack[4];
-  ssize_t read_size = read(fd, ack, 1);
+  read_size = read(fd, ack, 1);
   if ( (read_size != 1) || ack[0] != '!'){
     ack[1] = '\0';
     printf("protocol error(first ack:%s)\n",ack);
@@ -376,6 +382,28 @@ int write_bytecode(int fd, const void *buffer, int len){
   //OK all data sent.
   return 0;
 
+}
+
+int 
+reconnect(const char *port, int *fd)
+{
+  /*ok here open serial port*/
+  int fd_port = open(port, O_RDWR | O_NOCTTY);
+  if (fd_port < 0){
+    printf("failed to open port %s\n",port);
+    perror("error:");
+    return -1;
+  }
+  //http://irobot.csse.muroran-it.ac.jp/html-corner/robotMaker/elements/outlineSerialCommProgramming/
+  struct termios oldtio, newtio;
+  tcgetattr(fd_port, &oldtio);
+  newtio = oldtio;
+  cfsetspeed(&newtio, B9600);
+  tcflush(fd_port, TCIFLUSH);
+  tcsetattr(fd_port,TCSANOW, &newtio);
+
+  *fd = fd_port;
+  return 0;
 }
 
 int
@@ -414,19 +442,11 @@ main(int argc, char **argv)
   print_hint(&args);
 
   /*ok here open serial port*/
-  int fd_port = open(args.port, O_RDWR | O_NOCTTY);
-  if (fd_port < 0){
-    perror("can't open port\n");
+  int fd_port = 0;
+  if (0 != reconnect(args.port, &fd_port)){
     cleanup(mrb, &args);
     return EXIT_FAILURE;
   }
-  //http://irobot.csse.muroran-it.ac.jp/html-corner/robotMaker/elements/outlineSerialCommProgramming/
-  struct termios oldtio, newtio;
-  tcgetattr(fd_port, &oldtio);
-  newtio = oldtio;
-  cfsetspeed(&newtio, B9600);
-  tcflush(fd_port, TCIFLUSH);
-  tcsetattr(fd_port,TCSANOW, &newtio);
 
   if (!args.noreset){
     printf("  waiting for target on %s...\n", args.port);
@@ -438,7 +458,7 @@ main(int argc, char **argv)
       return EXIT_FAILURE;
     }
   }else{
-    printf("  continue without reset\n");
+    printf("continue without reset. Note:local variables are not restored.\n");
   }
   printf("target is ready.\n");
 
@@ -542,11 +562,24 @@ main(int argc, char **argv)
           }
           break;
         }
-
-
+      }else{
+        /* count the #file commands as strings if in a quote block */
+        strcat(ruby_code, "\n");
+        strcat(ruby_code, last_code_line);
+      }
+    }else if (strncmp(last_code_line,"#reconnect",strlen("#reconnect")) == 0){
+      if (!code_block_open){
+        close(fd_port);
+        printf("reconnecting to %s...", args.port);
+        if(0 != reconnect(args.port, &fd_port)) {
+          printf("\nfailed. Check connectivity.\n");
+          continue;
+        }else{
+          printf("\n");
+          continue;
+        }
       }
       else{
-        /* count the #file commands as strings if in a quote block */
         strcat(ruby_code, "\n");
         strcat(ruby_code, last_code_line);
       }
@@ -578,8 +611,11 @@ main(int argc, char **argv)
         printf("line %d: %s\n", parser->error_buffer[0].lineno, parser->error_buffer[0].message);
       }
       else {
+
         /* generate bytecode */
+        DPRINTF("(host:)generating bytecode...\n");
         n = mrb_generate_code(mrb, parser);
+        DPRINTF("(host:)generating bytecode...done. n = %d\n",n);
 
         char mrbpath[1024];
         strcpy(mrbpath,getenv("HOME"));
@@ -590,41 +626,57 @@ main(int argc, char **argv)
         }
 
         /* dump bytecode to file */
+        DPRINTF("(host:)dumping bytecode to temp file...\n");
         int ret = mrb_dump_irep_binary(mrb, n, 0, f);
         if (ret != MRB_DUMP_OK){
           printf("failed to dump bytecode. err = %d\n", ret);
         }
+        DPRINTF("(host:)dumping bytecode to temp file...done.\n");
 
-        /* store dumped bytecode to buffer */
+        /* read dumped bytecode to buffer */
         unsigned char bytecode[2048];
         fseek(f, 0, SEEK_SET);
         size_t bytecode_size = fread(bytecode, 1, 2048,f);
         if (ferror(f)){
           perror("file read error.");
         }
-        //printf("bytecode size = %zd\n",bytecode_size);
+        fclose(f);
         
+        DPRINTF("(host:)bytecode size = %zd\n", bytecode_size);
+
         /* send to target */
-        ret = write_bytecode(fd_port, bytecode, bytecode_size);
+        DPRINTF("(host:)sending bytecode to target...\n");
+        ret = write_bytecode(fd_port, bytecode, bytecode_size, args.verbose);
         if (ret != 0){
           printf("failed to send bytecode.\n");
+          ruby_code[0] = '\0';
+          last_code_line[0] = '\0';
+          mrb_gc_arena_restore(mrb, ai);
+          printf("type #reconnect to reconnect to target without reset.\n");
+          continue;
         }
-
-        fclose(f);
+        
+        DPRINTF("(host:)sending bytecode to target...done.\n");
 
         /* receive result from target */
-        char result[2048];
+        DPRINTF("(host:)receiving result from target...\n");
+        char result[4048];
         int is_exception = 0;
         ret = read_result(fd_port, result, &is_exception);
         if (ret != 0){
           printf("failed to get result.\n");
+          ruby_code[0] = '\0';
+          last_code_line[0] = '\0';
+          mrb_gc_arena_restore(mrb, ai);
+          printf("type #reconnect to reconnect to target without reset.\n");
+          continue;
         }
+        DPRINTF("(host:)receiving result from target...done. len=%zd\n",strlen(result));
         if (is_exception){
           printf("   %s\n",result);
         }else{
           printf(" => %s\n",result);
         }
-
       }
       ruby_code[0] = '\0';
       last_code_line[0] = '\0';

@@ -1,12 +1,20 @@
 
 #include <Servo.h>
 
+//#define MRB_WORD_BOXING
+//#define MRB_USE_FLOAT
+//#define MRB_NAN_BOXING
+
 #include "mruby.h"
 #include "mruby/irep.h"
 #include "mruby/string.h"
 #include "mruby/value.h"
 #include "mruby/dump.h"
 #include "mruby/proc.h"
+
+extern "C" {
+extern void codedump_all(mrb_state *mrb, int n);
+}
 
 #ifdef MPIDE
 //change heap size to 110kb
@@ -33,6 +41,11 @@ extern "C"
 //for Arduino Due It looks like stdout is already redirected to the programming port UART on the due
 //http://forum.arduino.cc/index.php/topic,148289.0.html
 
+#define MIRB_HOSTBASED_DEBUG
+
+//DEBUG PRINT
+//http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
+#define DPRINTF(fmt,...) if(verbose) printf("(target:)debug:"fmt,##__VA_ARGS__)
 
 byte g_byteCodeBuf[2048];
 mrb_state *mrb;
@@ -80,13 +93,16 @@ inline void waitForReadAvailable(){
 	while(Serial.available() <= 0);
 }
 
-void readByteCode(byte *buffer, int *len){
+void readByteCode(byte *buffer, int *len, int *verbose){
 	byte soh = Serial.read();
-	if (soh != 0x01){
-		//something wrong!!! 
-		Serial.println("(target):NON SOH received as start of data");
-		return;
-	}
+	if (soh == 0x01 || soh == 0x02){
+  }else{
+    //something wrong!!! 
+    Serial.println("(target):NON SOH received as start of data");
+    return;    
+  }
+  *verbose = (soh == 0x02) ? 1 : 0;
+
 	waitForReadAvailable();
 	unsigned short lengthH = Serial.read();
 	waitForReadAvailable();
@@ -159,10 +175,12 @@ void setup(){
 void loop(){
 
   if (Serial.available() > 0 ){
-
+    int verbose = 0;
   	//receive bytecode
     int byteCodeLen = 0;
-    readByteCode( g_byteCodeBuf, &byteCodeLen);
+    readByteCode( g_byteCodeBuf, &byteCodeLen, &verbose);
+
+    DPRINTF("readByteCode done\n",0);
 
     //load bytecode
     FILE *fp = fmemopen(g_byteCodeBuf, byteCodeLen, "rb");
@@ -174,34 +192,45 @@ void loop(){
   	}
   	fclose(fp);
 
+    DPRINTF("mirb_read_ire_file done.\n");
+    if (verbose) codedump_all(mrb, n);
+
   	//evaluate the bytecode
   	mrb_value result;
   	result = mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_top_self(mrb));
 
+    DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
+
+    mrb_value result_str;
   	//prepare inspected string from result
     int exeption_on_run = mrb->exc? 1: 0;
   	if (exeption_on_run){
-  		result = mrb_funcall(mrb, mrb_obj_value(mrb->exc),"inspect",0);
+  		result_str = mrb_funcall(mrb, mrb_obj_value(mrb->exc),"inspect",0);
       mrb->exc = 0;
   	}else{
+      DPRINTF("asking #inspect possibility to result\n");
   		if (!mrb_respond_to(mrb, result, mrb_intern(mrb, "inspect"))){
-  			result = mrb_any_to_s(mrb, result);
+  			result_str = mrb_any_to_s(mrb, result);
   		}else{
-  			result = mrb_funcall(mrb, result, "inspect",0);
+  			result_str = mrb_funcall(mrb, result, "inspect",0);
   		}
+      mrb_gc_mark_value(mrb, result);
   	}
+
+    if (mrb->exc == 0) {
+      DPRINTF("inspected result:%s\n", RSTRING_PTR(result_str));
+    }
 
     //write result string back to host
     if (mrb->exc){  //failed to inspect
       mrb->exc = 0;
-      const char *resultStr = "(target):too low memory to return anything.";
-      writeResult(resultStr, 1);
+      const char *msg = "(target):too low memory to return anything.";
+      writeResult(msg, 1);
     }else{
-      writeResult(RSTRING_PTR(result), exeption_on_run);
+      writeResult(RSTRING_PTR(result_str), exeption_on_run);
+      mrb_gc_mark_value(mrb, result_str);
     }
 
-  	//result = mrb_nil_value();	//meaningless??
-    mrb_gc_mark_value(mrb,result);  //??
   	mrb_garbage_collect(mrb);      //??
     mrb_gc_arena_restore(mrb, ai);  //??
 

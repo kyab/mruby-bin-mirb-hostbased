@@ -77,18 +77,33 @@ test.rb loaded into target
  => 25
 ```
 
-## Reconnect without reset
-You can reconnect to serial(usb-serial) without reset. 
-With ```--noreset``` option, mirb-hostbased does not wait for target to send HELLO.
+## Reconnect (without reset)
+You can reconnect to serial(usb-serial) if your device is self-powered. 
+With ```#reconnect``` command or ```--noreset``` option, mirb-hostbased simply reopen serial port.
 
 ```
- mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
- >
+> n=100
+ => 100 
+> #reconnect
+reconnecting to /dev/cu.usbserial-A600CKP6...
+> n
+ => 100
 ```
-note: You cannot reuse local variable in previous mirb-hostbased session. ```#reconnect``` command will solve the problem in future.
+
+or 
+```
+> $n=100
+ => 100 
+> exit
+mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
+> $n
+ => 100
+```
+restriction: With --noreset option, you cannot reuse local variable in previous mirb-hostbased session.
+This is because mirb-hostbased can not restore previous context.
 
 ###For Arduino boards:
-Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use ```--noreset``` option,
+Usually Arduino boards automatically reset when USB is (re)connected even self-powered from external power source. So to use ```#reconnect``` command or ```--noreset``` option,
 you have to disable auto-reset temporarily. 
 I recommend to use capacitor hack introduced bellow.
 http://electronics.stackexchange.com/questions/24743/arduino-resetting-while-reconnecting-the-serial-terminal.
@@ -101,22 +116,21 @@ mirb-hostbased -p /dev/cu.usbserial-A600CKP6
 *   puts "foo"
 * end
  => nil
-> $global = 99
+> n = 99
  => 99
-> exit
 (Disconnect USB.)
-...
+(Have fun with target.)
 (Connect capacitor between RESET and GND on board. auto-reset disabled.)
 (Reconnect USB)
-mirb-hostbased --noreset -p /dev/cu.usbserial-A600CKP6
+> #reconnect
 > foo
 foo
  => nil
-> $global
+> n
  => 99
 ```
 
-```#file``` command and ```--noreset``` option provide you rapid try-and-test cycle.
+```#file``` command and ```#reconnect``` option provide you rapid try-and-test cycle.
 
 # Note
 For detailed information about how to compile mruby for chipKIT Max32, check my blog post.
