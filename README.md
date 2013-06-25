@@ -6,6 +6,7 @@ works with target board via serial communication.
 
 ## Demo
  http://www.youtube.com/watch?v=e8gTTSdxlPU
+
  http://www.youtube.com/watch?v=zNeGxjQD1Y0
  
 ## How it works
@@ -136,16 +137,20 @@ foo
 # Related articles
 ##My blog post:
  Hostbased irb Chap.1(Japanese):
+
  http://d.hatena.ne.jp/kyab/20130621
 
  Hostbased irb Chap.2(Japanese):
+ 
  http://d.hatena.ne.jp/kyab/20130625
 
  How to compile mruby for chipKITMax32(Japanese):
+ 
  http://d.hatena.ne.jp/kyab/20130201
 
 ##Arduino Due mirb(full compiler on board)
  Interactive Arduino Shell - mruby.sh
+ 
  http://blog.mruby.sh/201305201003.html
 
 
