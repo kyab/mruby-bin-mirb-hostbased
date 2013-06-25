@@ -351,11 +351,15 @@ int write_bytecode(int fd, const void *buffer, int len, int verbose){
   }
 
   char ack[4];
-  read_size = read(fd, ack, 1);
-  if ( (read_size != 1) || ack[0] != '!'){
-    ack[1] = '\0';
-    printf("protocol error(first ack:%s)\n",ack);
-    return -1;
+  while(TRUE){
+    read_size = read(fd, ack, 1);
+    if ( (read_size != 1) || ack[0] != '!'){
+      //ack[1] = '\0';
+      //printf("protocol error(first ack:%s)\n",ack);
+      //return -1;
+    }else{
+      break;
+    }
   }
 
   unsigned short len_written = 0;

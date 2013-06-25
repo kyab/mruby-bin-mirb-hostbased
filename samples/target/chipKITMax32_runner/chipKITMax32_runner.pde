@@ -88,24 +88,29 @@ void *myallocf(mrb_state *mrb, void *p, size_t size, void *ud){
   }
 }
 
-//TODO: refactor this to inline byte waitRead()
-inline void waitForReadAvailable(){
-	while(Serial.available() <= 0);
+inline bool waitForReadAvailable(int waitMs = 1000){
+  int start_ms = millis();
+	while( (millis() - start_ms) < waitMs){
+    if (Serial.available() > 0) {
+      return true;
+    }
+  }
+  return false;
 }
 
-void readByteCode(byte *buffer, int *len, int *verbose){
+bool readByteCode(byte *buffer, int *len, int *verbose){
 	byte soh = Serial.read();
 	if (soh == 0x01 || soh == 0x02){
   }else{
     //something wrong!!! 
     Serial.println("(target):NON SOH received as start of data");
-    return;    
+    return false;    
   }
   *verbose = (soh == 0x02) ? 1 : 0;
 
-	waitForReadAvailable();
+	if (!waitForReadAvailable()) return false;
 	unsigned short lengthH = Serial.read();
-	waitForReadAvailable();
+	if (!waitForReadAvailable()) return false;
 	unsigned short lengthL = Serial.read();
 	unsigned short lenToRead = (lengthH << 8 | lengthL);
 
@@ -114,7 +119,7 @@ void readByteCode(byte *buffer, int *len, int *verbose){
 	unsigned short lenReaded = 0;
 	while(lenReaded < lenToRead){
 		for (int i = 0 ; i < 100 ; i++){
-			waitForReadAvailable();
+			if (!waitForReadAvailable()) return false;
 			buffer[lenReaded] = Serial.read();
 			lenReaded++;
 			if (lenReaded == lenToRead){
@@ -125,6 +130,7 @@ void readByteCode(byte *buffer, int *len, int *verbose){
 	}
 
 	*len = lenReaded;
+  return true;
 }
 
 void writeResult(const char *resultStr, int isException){
@@ -138,7 +144,7 @@ void writeResult(const char *resultStr, int isException){
 	Serial.write(SOH);
 	Serial.write(lengthH);
 	Serial.write(lengthL);
-	waitForReadAvailable();
+	if (!waitForReadAvailable()) return;
 	Serial.read();			//must be a '!'
 
 	unsigned short lenWritten = 0;
@@ -150,7 +156,7 @@ void writeResult(const char *resultStr, int isException){
 				break;
 			}
 		}
-		waitForReadAvailable();
+		if (!waitForReadAvailable()) return;
 		Serial.read();		//must be a '#'
 	}
 }
@@ -171,69 +177,75 @@ void setup(){
   Serial.write((byte)'\0');
 }
 
+void readEvalPrint(){
+  int verbose = 0;
+
+  //receive bytecode
+  int byteCodeLen = 0;
+  if (!readByteCode( g_byteCodeBuf, &byteCodeLen, &verbose))
+    return;
+
+
+  DPRINTF("readByteCode done\n",0);
+
+  //load bytecode
+  FILE *fp = fmemopen(g_byteCodeBuf, byteCodeLen, "rb");
+  int n = mrb_read_irep_file(mrb, fp);
+  if (n < 0) {
+    const char *resultStr = "(target):illegal bytecode.";
+    writeResult(resultStr, 1);
+    return;
+  }
+  fclose(fp);
+
+  DPRINTF("mirb_read_ire_file done.\n");
+  if (verbose) codedump_all(mrb, n);
+
+  //evaluate the bytecode
+  mrb_value result;
+  result = mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_top_self(mrb));
+
+  DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
+
+  mrb_value result_str;
+  //prepare inspected string from result
+  int exeption_on_run = mrb->exc? 1: 0;
+  if (exeption_on_run){
+    result_str = mrb_funcall(mrb, mrb_obj_value(mrb->exc),"inspect",0);
+    mrb->exc = 0;
+  }else{
+    DPRINTF("asking #inspect possibility to result\n");
+    if (!mrb_respond_to(mrb, result, mrb_intern(mrb, "inspect"))){
+      result_str = mrb_any_to_s(mrb, result);
+    }else{
+      result_str = mrb_funcall(mrb, result, "inspect",0);
+    }
+    mrb_gc_mark_value(mrb, result);
+  }
+
+  if (mrb->exc == 0) {
+    DPRINTF("inspected result:%s\n", RSTRING_PTR(result_str));
+  }
+
+  //write result string back to host
+  if (mrb->exc){  //failed to inspect
+    mrb->exc = 0;
+    const char *msg = "(target):too low memory to return anything.";
+    writeResult(msg, 1);
+  }else{
+    writeResult(RSTRING_PTR(result_str), exeption_on_run);
+    mrb_gc_mark_value(mrb, result_str);
+  }
+
+  mrb_garbage_collect(mrb);      //??
+  mrb_gc_arena_restore(mrb, ai);  //??
+
+}
 
 void loop(){
 
   if (Serial.available() > 0 ){
-    int verbose = 0;
-  	//receive bytecode
-    int byteCodeLen = 0;
-    readByteCode( g_byteCodeBuf, &byteCodeLen, &verbose);
-
-    DPRINTF("readByteCode done\n",0);
-
-    //load bytecode
-    FILE *fp = fmemopen(g_byteCodeBuf, byteCodeLen, "rb");
-    int n = mrb_read_irep_file(mrb, fp);
-  	if (n < 0) {
-  		const char *resultStr = "(target):illegal bytecode.";
-  		writeResult(resultStr, 1);
-  		return;
-  	}
-  	fclose(fp);
-
-    DPRINTF("mirb_read_ire_file done.\n");
-    if (verbose) codedump_all(mrb, n);
-
-  	//evaluate the bytecode
-  	mrb_value result;
-  	result = mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_top_self(mrb));
-
-    DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
-
-    mrb_value result_str;
-  	//prepare inspected string from result
-    int exeption_on_run = mrb->exc? 1: 0;
-  	if (exeption_on_run){
-  		result_str = mrb_funcall(mrb, mrb_obj_value(mrb->exc),"inspect",0);
-      mrb->exc = 0;
-  	}else{
-      DPRINTF("asking #inspect possibility to result\n");
-  		if (!mrb_respond_to(mrb, result, mrb_intern(mrb, "inspect"))){
-  			result_str = mrb_any_to_s(mrb, result);
-  		}else{
-  			result_str = mrb_funcall(mrb, result, "inspect",0);
-  		}
-      mrb_gc_mark_value(mrb, result);
-  	}
-
-    if (mrb->exc == 0) {
-      DPRINTF("inspected result:%s\n", RSTRING_PTR(result_str));
-    }
-
-    //write result string back to host
-    if (mrb->exc){  //failed to inspect
-      mrb->exc = 0;
-      const char *msg = "(target):too low memory to return anything.";
-      writeResult(msg, 1);
-    }else{
-      writeResult(RSTRING_PTR(result_str), exeption_on_run);
-      mrb_gc_mark_value(mrb, result_str);
-    }
-
-  	mrb_garbage_collect(mrb);      //??
-    mrb_gc_arena_restore(mrb, ai);  //??
-
+    readEvalPrint();
   }
   delay(10);
 }
