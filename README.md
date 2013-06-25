@@ -6,6 +6,7 @@ works with target board via serial communication.
 
 ## Demo
  http://www.youtube.com/watch?v=e8gTTSdxlPU
+ http://www.youtube.com/watch?v=zNeGxjQD1Y0
  
 ## How it works
 As name "hostbased" implies, mirb-hostbased does not send user input directly to
@@ -132,10 +133,20 @@ foo
 
 ```#file``` command and ```#reconnect``` option provide you rapid try-and-test cycle.
 
-# Note
-For detailed information about how to compile mruby for chipKIT Max32, check my blog post.
+# Related articles
+##My blog post:
+ Hostbased irb Chap.1(Japanese):
+ http://d.hatena.ne.jp/kyab/20130621
 
-http://d.hatena.ne.jp/kyab/20130201
+ Hostbased irb Chap.2(Japanese):
+ http://d.hatena.ne.jp/kyab/20130625
+
+ How to compile mruby for chipKITMax32(Japanese):
+ http://d.hatena.ne.jp/kyab/20130201
+
+##Arduino Due mirb(full compiler on board)
+ Interactive Arduino Shell - mruby.sh
+ http://blog.mruby.sh/201305201003.html
 
 
 
