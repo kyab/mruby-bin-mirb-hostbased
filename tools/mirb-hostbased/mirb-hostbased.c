@@ -691,7 +691,9 @@ main(int argc, char **argv)
   mrbc_context_free(mrb, cxt);
   mrb_close(mrb);
 
+#ifdef ENABLE_READLINE
   write_history(history_path);
-
+#endif
+  
   return 0;
 }
