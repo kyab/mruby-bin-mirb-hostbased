@@ -237,43 +237,50 @@ print_cmdline(int code_block_open)
   }
 }
 
+ssize_t
+read_target(int fd, char *buffer){
+
+  // non-blocking 1 byte read with timeout
+  ssize_t result = 0;
+  int timeout = 20;
+  while( (0==result) && (0<timeout--) ){
+    result = read(fd, buffer, 1);
+    if(0>=result){
+      // normal with O_NONBLOCK
+      usleep(10000);
+      result = 0;
+    }
+  }
+  return result;
+}
+
+void
+read_flush(int fd){
+
+  // flush all serial input
+  char c;
+  usleep(1000);
+  while( 0 < read(fd, &c, 1) )
+    ;
+}
+
 int
 wait_hello(int fd){
 
-  //TODO : introduce some timeout functionality. 
+  // use ENQ/ACK polling to sync with the target
+  const char ACK = 0x06;
+  char c=0;
+  const char ENQ = 0x05;
+  int retry = 10;
 
-  const char SOH = 0x01;
-  char c;
-  while(1){
-    size_t read_size = read(fd, &c, 1);
-    if (read_size != 1) {
-      perror("read error");
-      return -1;
-    }
-    if (c == SOH) break;
-    putc(c, stdout);
+  while((c!=ACK) && (0<retry--)){
+    read_flush(fd);
+    c = ENQ;
+    (void)write(fd, &c, 1);
+    (void)read_target(fd, &c);
   }
-
-  char message[128];
-  ssize_t len_readed = 0;
-
-  while( len_readed < strlen("HELLO")+1){
-    char buffer[128];
-    ssize_t read_size = read(fd, buffer,128);
-    if(read_size == 0){
-      printf("<EOF>\n");
-      return -1;
-    }else if (read_size < 0){
-      perror("read error");
-      return -1;
-    }
-    memcpy(message + len_readed, buffer, read_size);
-    len_readed += read_size;
-  }
-
-  if (strcmp(message, "HELLO") != 0 ){
-    message[len_readed] = '\0';
-    printf("unknown hello message : %s\n", message);
+  if (c != ACK){
+    printf("sync error\n");
     return -1;
   }
   
@@ -287,7 +294,7 @@ int read_result(int fd, char *result_str, int *is_exeption){
   ssize_t read_size;
   char c;
   while(1){    
-    read_size = read(fd, &c, 1);
+    read_size = read_target(fd, &c);
     if (read_size != 1) goto read_error;
     if (c == SOH || c == SOH_EXCEPTION) break;
 
@@ -299,9 +306,9 @@ int read_result(int fd, char *result_str, int *is_exeption){
 
   unsigned char len_h;
   unsigned char len_l;
-  read_size = read(fd, &len_h,1);
+  read_size = read_target(fd, (char *)&len_h);
   if (read_size != 1) goto read_error;
-  read_size = read(fd, &len_l,1);
+  read_size = read_target(fd, (char *)&len_l);
   if (read_size != 1) goto read_error;
 
   char ack = '!';
@@ -314,7 +321,7 @@ int read_result(int fd, char *result_str, int *is_exeption){
   int i;
   while(len_readed < len_to_read){
     for (i = 0 ; i < 100; i++){
-      read_size = read(fd, result_str+len_readed, 1);
+      read_size = read_target(fd, result_str+len_readed);
       if (read_size != 1) goto read_error;
       len_readed++;
       if (len_readed == len_to_read){
@@ -341,48 +348,45 @@ write_error:
 int write_bytecode(int fd, const void *buffer, int len, int verbose){
 
   ssize_t read_size;
+  ssize_t written_size;
 
   unsigned char header[3];
   header[0] = verbose ? 0x02 : 0x01; //1:SOH 2:SOH with verbose
   header[1] = (unsigned char)(len >> 8);
   header[2] = (unsigned char)(len & 0xFF);
 
-  ssize_t written_size = write(fd, header, 3);
-  if (written_size != 3){
-    printf("write error(header)\n");
+  char ack='?';
+  int retry = 5;
+  while ((ack != '!') && (0 < retry--)){
+    read_flush(fd);
+    (void)write(fd, header, 3);
+    (void)read_target(fd, &ack);
+  }
+  if ( '!' != ack ){
+    printf("protocol error(first ack:%c)\n",ack);
     return -1;
   }
 
-  char ack[4];
-  while(TRUE){
-    read_size = read(fd, ack, 1);
-    if ( (read_size != 1) || ack[0] != '!'){
-      //ack[1] = '\0';
-      //printf("protocol error(first ack:%s)\n",ack);
-      //return -1;
-    }else{
-      break;
-    }
-  }
-
   unsigned short len_written = 0;
-  int i;
   while(len_written < len){
-    for (i = 0 ; i < 100 ; i++){
+    int i=0;
+    while(i < 100){
       written_size = write(fd, buffer + len_written,1);
-      if (written_size != 1) {
+      if((-1==written_size) && (EAGAIN==errno)) continue;// no i++
+      else if (written_size != 1) {
         perror("write error\n");
         return -1;
       }
+      i++;
       len_written++;
       if (len_written == len){
         break;
       }
     }
-    read_size = read(fd, ack ,1);
-    if ( (read_size != 1) || ack[0] != '#'){
-      ack[1] = '\0';
-      printf("protocol error(normal ack:%s)\n", ack);
+    ack = '?';
+    read_size = read_target(fd, &ack);
+    if ( (read_size != 1) || ack != '#'){
+      printf("protocol error(normal ack:%c)\n", ack);
       return -1;
     }
   }
@@ -396,7 +400,7 @@ int
 reconnect(const char *port, int *fd)
 {
   /*ok here open serial port*/
-  int fd_port = open(port, O_RDWR | O_NOCTTY);
+  int fd_port = open(port, O_RDWR | O_NOCTTY | O_NONBLOCK);
   if (fd_port < 0){
     printf("failed to open port %s\n",port);
     perror("error:");
