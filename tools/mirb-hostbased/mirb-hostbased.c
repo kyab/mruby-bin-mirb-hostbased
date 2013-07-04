@@ -30,7 +30,9 @@
 //http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
 #define DPRINTF(...) if (args.verbose) printf(__VA_ARGS__)
 
+#ifdef ENABLE_READLINE
 static const char *history_file = ".mirb-hostbased_history";
+#endif
 char history_path[1024];
 
 /* Guess if the user might want to enter more
@@ -309,8 +311,9 @@ int read_result(int fd, char *result_str, int *is_exeption){
   unsigned short len_to_read = ((unsigned short)len_h << 8) | len_l;
 
   unsigned short len_readed = 0;
+  int i;
   while(len_readed < len_to_read){
-    for (int i = 0 ; i < 100; i++){
+    for (i = 0 ; i < 100; i++){
       read_size = read(fd, result_str+len_readed, 1);
       if (read_size != 1) goto read_error;
       len_readed++;
@@ -363,8 +366,9 @@ int write_bytecode(int fd, const void *buffer, int len, int verbose){
   }
 
   unsigned short len_written = 0;
+  int i;
   while(len_written < len){
-    for (int i = 0 ; i < 100 ; i++){
+    for (i = 0 ; i < 100 ; i++){
       written_size = write(fd, buffer + len_written,1);
       if (written_size != 1) {
         perror("write error\n");
