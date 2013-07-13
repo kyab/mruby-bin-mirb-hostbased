@@ -238,17 +238,20 @@ print_cmdline(int code_block_open)
 }
 
 ssize_t
-read_target(int fd, char *buffer){
+read_target(int fd, char *buffer, int timeout){
 
   // non-blocking 1 byte read with timeout
+  // timeout in roughly 10 mSec ticks (0 == infinite)
   ssize_t result = 0;
-  int timeout = 20;
-  while( (0==result) && (0<timeout--) ){
+  while(0==result){
     result = read(fd, buffer, 1);
     if(0>=result){
       // normal with O_NONBLOCK
-      usleep(10000);
       result = 0;
+      if ( 0 != timeout ){
+        if ( 0 >= --timeout ) break;
+      }
+      usleep(10000);
     }
   }
   return result;
@@ -271,13 +274,15 @@ wait_hello(int fd){
   const char ACK = 0x06;
   char c=0;
   const char ENQ = 0x05;
-  int retry = 10;
+  int retry = 100;
 
-  while((c!=ACK) && (0<retry--)){
-    read_flush(fd);
+  while(0<retry--){
     c = ENQ;
     (void)write(fd, &c, 1);
-    (void)read_target(fd, &c);
+    while ( 1 == read_target(fd, &c, 20) ) {
+      if (c == ACK) break;
+      putc(c, stdout);
+    }
   }
   if (c != ACK){
     printf("sync error\n");
@@ -294,7 +299,7 @@ int read_result(int fd, char *result_str, int *is_exeption){
   ssize_t read_size;
   char c;
   while(1){    
-    read_size = read_target(fd, &c);
+    read_size = read_target(fd, &c, 0);
     if (read_size != 1) goto read_error;
     if (c == SOH || c == SOH_EXCEPTION) break;
 
@@ -306,9 +311,9 @@ int read_result(int fd, char *result_str, int *is_exeption){
 
   unsigned char len_h;
   unsigned char len_l;
-  read_size = read_target(fd, (char *)&len_h);
+  read_size = read_target(fd, (char *)&len_h, 20);
   if (read_size != 1) goto read_error;
-  read_size = read_target(fd, (char *)&len_l);
+  read_size = read_target(fd, (char *)&len_l, 20);
   if (read_size != 1) goto read_error;
 
   char ack = '!';
@@ -321,7 +326,7 @@ int read_result(int fd, char *result_str, int *is_exeption){
   int i;
   while(len_readed < len_to_read){
     for (i = 0 ; i < 100; i++){
-      read_size = read_target(fd, result_str+len_readed);
+      read_size = read_target(fd, result_str+len_readed, 20);
       if (read_size != 1) goto read_error;
       len_readed++;
       if (len_readed == len_to_read){
@@ -360,7 +365,7 @@ int write_bytecode(int fd, const void *buffer, int len, int verbose){
   while ((ack != '!') && (0 < retry--)){
     read_flush(fd);
     (void)write(fd, header, 3);
-    (void)read_target(fd, &ack);
+    (void)read_target(fd, &ack, 20);
   }
   if ( '!' != ack ){
     printf("protocol error(first ack:%c)\n",ack);
@@ -384,7 +389,7 @@ int write_bytecode(int fd, const void *buffer, int len, int verbose){
       }
     }
     ack = '?';
-    read_size = read_target(fd, &ack);
+    read_size = read_target(fd, &ack, 20);
     if ( (read_size != 1) || ack != '#'){
       printf("protocol error(normal ack:%c)\n", ack);
       return -1;

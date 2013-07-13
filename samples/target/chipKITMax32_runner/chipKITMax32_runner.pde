@@ -5,7 +5,11 @@
 //#define MRB_USE_FLOAT
 //#define MRB_NAN_BOXING
 
+#ifdef ARDUINO
+#if ARDUINO>=152  //for Due only
 #include "itoa.h"
+#endif
+#endif
 
 #include "mruby.h"
 #include "mruby/irep.h"
