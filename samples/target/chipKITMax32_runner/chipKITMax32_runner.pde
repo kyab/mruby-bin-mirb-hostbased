@@ -5,6 +5,12 @@
 //#define MRB_USE_FLOAT
 //#define MRB_NAN_BOXING
 
+#ifdef ARDUINO
+#if ARDUINO>=152  //for Due only
+#include "itoa.h"
+#endif
+#endif
+
 #include "mruby.h"
 #include "mruby/irep.h"
 #include "mruby/string.h"
@@ -54,7 +60,9 @@ size_t total_allocated_mem = 0;
 //required to link with mruby-arduino
 void __dummy(){
   random(1,1);
+#ifdef MPIDE
   tone(1,2,3);
+#endif
   pulseIn(1,2,3);
   shiftOut(1,2,3,4);
 }
@@ -100,8 +108,12 @@ inline bool waitForReadAvailable(int waitMs = 1000){
 
 bool readByteCode(byte *buffer, int *len, int *verbose){
 	byte soh = Serial.read();
-	if (soh == 0x01 || soh == 0x02){
-  }else{
+	if ((soh == 0x01 || soh == 0x02)) {
+  }else if (soh == 0x05) { // ENQ
+	//send ACK 
+	Serial.write((byte)0x06);
+	return false;
+  } else {
     //something wrong!!! 
     Serial.println("(target):NON SOH received as start of data");
     return false;    
@@ -170,11 +182,6 @@ void setup(){
   ai = mrb_gc_arena_save(mrb);
 
   reportMem();
-
-  //send HELLO message 
-  Serial.print((byte)0x01); //SOH 
-  Serial.print("HELLO");
-  Serial.write((byte)'\0');
 }
 
 void readEvalPrint(){
