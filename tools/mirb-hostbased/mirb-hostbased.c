@@ -266,9 +266,10 @@ read_flush(int fd){
   while( 0 < read(fd, &c, 1) )
     ;
 }
+int reconnect(const char *port, int *fd);
 
 int
-wait_hello(int fd){
+wait_hello(const char *port , int *fd){
 
   // use ENQ/ACK polling to sync with the target
   const char ACK = 0x06;
@@ -276,13 +277,30 @@ wait_hello(int fd){
   const char ENQ = 0x05;
   int retry = 100;
 
+  int send_enq = 1;
+
   while(0<retry--){
     c = ENQ;
-    (void)write(fd, &c, 1);
-    while ( 1 == read_target(fd, &c, 20) ) {
-      if (c == ACK) break;
-      putc(c, stdout);
+    int ret = 0;
+    if (send_enq){
+      ret = write(*fd, &c, 1);
+      
+      //special handling for chipKIT Max32
+      //we dont send ENQ for chipKIT Max32 because bootloader enter update mode once some data received..
+      if ((ret == -1) || (errno == EAGAIN || errno == EWOULDBLOCK)){
+        printf("  chipKIT detected. reopening port..\n");
+        reconnect(port , fd);     //force board to reset
+        send_enq = 0;             //don't send ENQ anymore.
+      }
     }
+    while ( 1 == read_target(*fd, &c, 20) ) {
+      if (c == ACK) {
+        break;
+      }else{
+        putc(c, stdout);
+      }
+    }
+    if (c == ACK) break;
   }
   if (c != ACK){
     printf("sync error\n");
@@ -468,7 +486,7 @@ main(int argc, char **argv)
   if (!args.noreset){
     printf("  waiting for target on %s...\n", args.port);
     fflush(stdout);
-    int ret = wait_hello(fd_port);
+    int ret = wait_hello(args.port, &fd_port);
     if (ret != 0){
       printf("\nfailed to open communication with target.\n");
       cleanup(mrb, &args);

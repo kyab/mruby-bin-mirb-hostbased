@@ -59,6 +59,8 @@ target is ready.
 > exit
 ```
 
+Note: you should use /dev/cu.*. /dev/tty.* may not work.
+
 ## Loading file
 You can use ```#file``` special command to read *.rb files.
 

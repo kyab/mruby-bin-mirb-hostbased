@@ -44,10 +44,13 @@ extern "C"
 }
 #endif
 
-//for Arduino Due It looks like stdout is already redirected to the programming port UART on the due
+#ifdef ARDUINO
+#if ARDUINO>=152  //for Due only
+//for Arduino Due It looks like stdout is already redirected to the programming port UART.
 //http://forum.arduino.cc/index.php/topic,148289.0.html
+#endif
+#endif
 
-#define MIRB_HOSTBASED_DEBUG
 
 //DEBUG PRINT
 //http://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
@@ -109,10 +112,11 @@ inline bool waitForReadAvailable(int waitMs = 1000){
 bool readByteCode(byte *buffer, int *len, int *verbose){
 	byte soh = Serial.read();
 	if ((soh == 0x01 || soh == 0x02)) {
+  
   }else if (soh == 0x05) { // ENQ
-	//send ACK 
-	Serial.write((byte)0x06);
-	return false;
+    //send ACK 
+    Serial.write((byte)0x06);
+    return false;
   } else {
     //something wrong!!! 
     Serial.println("(target):NON SOH received as start of data");
@@ -182,6 +186,11 @@ void setup(){
   ai = mrb_gc_arena_save(mrb);
 
   reportMem();
+
+#ifdef MPIDE
+  Serial.write((byte)0x06);   //ACK witout ENQ
+#endif
+
 }
 
 void readEvalPrint(){
