@@ -456,6 +456,7 @@ main(int argc, char **argv)
   // mrb_value result;
   struct _args args;
   int n;
+  struct RProc *proc;
   int code_block_open = FALSE;
   int ai;
 
@@ -646,11 +647,10 @@ main(int argc, char **argv)
         printf("line %d: %s\n", parser->error_buffer[0].lineno, parser->error_buffer[0].message);
       }
       else {
-
         /* generate bytecode */
         DPRINTF("(host:)generating bytecode...\n");
-        n = mrb_generate_code(mrb, parser);
-        DPRINTF("(host:)generating bytecode...done. n = %d\n",n);
+        proc = mrb_generate_code(mrb, parser);
+        DPRINTF("(host:)generating bytecode...done.\n");
 
         char mrbpath[1024];
         strcpy(mrbpath,getenv("HOME"));
@@ -662,7 +662,7 @@ main(int argc, char **argv)
 
         /* dump bytecode to file */
         DPRINTF("(host:)dumping bytecode to temp file...\n");
-        int ret = mrb_dump_irep_binary(mrb, n, 0, f);
+        int ret = mrb_dump_irep_binary(mrb, proc->body.irep, 0, f);
         if (ret != MRB_DUMP_OK){
           printf("failed to dump bytecode. err = %d\n", ret);
         }
