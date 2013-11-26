@@ -19,7 +19,7 @@
 #include "mruby/proc.h"
 
 extern "C" {
-extern void codedump_all(mrb_state *mrb, int n);
+extern void codedump_all(mrb_state *mrb, struct RProc *proc);
 }
 
 #ifdef MPIDE
@@ -73,7 +73,7 @@ void __dummy(){
 void reportMem(){
 	char str[15];
 	itoa(total_allocated_mem, str, 10);
-	Serial.print("(taget):TOTAL_ALLOCATED : ");
+	Serial.print("(target):TOTAL_ALLOCATED : ");
 	Serial.println(str);
 }
 
@@ -206,8 +206,8 @@ void readEvalPrint(){
 
   //load bytecode
   FILE *fp = fmemopen(g_byteCodeBuf, byteCodeLen, "rb");
-  int n = mrb_read_irep_file(mrb, fp);
-  if (n < 0) {
+  struct mrb_irep *irep = mrb_read_irep_file(mrb, fp);
+  if (!irep) {
     const char *resultStr = "(target):illegal bytecode.";
     writeResult(resultStr, 1);
     return;
@@ -215,11 +215,14 @@ void readEvalPrint(){
   fclose(fp);
 
   DPRINTF("mirb_read_ire_file done.\n");
-  if (verbose) codedump_all(mrb, n);
+  struct RProc *proc;
+  proc = mrb_proc_new(mrb, irep);
+  // mrb_irep_decref(mrb, irep);
+  if (verbose) codedump_all(mrb, proc);
 
   //evaluate the bytecode
   mrb_value result;
-  result = mrb_run(mrb, mrb_proc_new(mrb, mrb->irep[n]), mrb_top_self(mrb));
+  result = mrb_run(mrb, proc, mrb_top_self(mrb));
 
   DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
 
