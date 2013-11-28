@@ -217,7 +217,7 @@ void readEvalPrint(){
   DPRINTF("mirb_read_ire_file done.\n");
   struct RProc *proc;
   proc = mrb_proc_new(mrb, irep);
-  // mrb_irep_decref(mrb, irep);
+  mrb_irep_decref(mrb, irep);
   if (verbose) codedump_all(mrb, proc);
 
   //evaluate the bytecode
