@@ -234,7 +234,7 @@ void readEvalPrint(){
     mrb->exc = 0;
   }else{
     DPRINTF("asking #inspect possibility to result\n");
-    if (!mrb_respond_to(mrb, result, mrb_intern(mrb, "inspect"))){
+    if (!mrb_respond_to(mrb, result, mrb_intern_cstr(mrb, "inspect"))){
       result_str = mrb_any_to_s(mrb, result);
     }else{
       result_str = mrb_funcall(mrb, result, "inspect",0);
