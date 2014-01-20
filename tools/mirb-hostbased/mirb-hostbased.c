@@ -548,7 +548,8 @@ main(int argc, char **argv)
         strcat(ruby_code, "\n");
         strcat(ruby_code, last_code_line);
       }
-    }else if (strncmp(last_code_line,"#file",strlen("#file")) == 0){
+    }else if ((strncmp(last_code_line,"#file",strlen("#file")) == 0) || 
+              (strncmp(last_code_line,"#load",strlen("#load")) == 0)){
       if (!code_block_open) {
         char *filename = last_code_line + strlen("#file");
 
@@ -599,7 +600,7 @@ main(int argc, char **argv)
           break;
         }
       }else{
-        /* count the #file commands as strings if in a quote block */
+        /* count the #file/#load commands as strings if in a quote block */
         strcat(ruby_code, "\n");
         strcat(ruby_code, last_code_line);
       }

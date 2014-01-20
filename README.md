@@ -62,7 +62,7 @@ target is ready.
 Note: you should use /dev/cu.*. /dev/tty.* may not work.
 
 ## Loading file
-You can use ```#file``` special command to read *.rb files.
+You can use ```#load```(or ```#file```) special command to read *.rb files.
 
 test.rb
 ```
@@ -74,7 +74,7 @@ puts "test.rb loaded into target"
 
 mirb-hostbased:
 ```
-> #file /path/to/test.rb
+> #load /path/to/test.rb
 test.rb loaded into target
  => nil
 > square_add(2,3)
@@ -134,7 +134,7 @@ foo
  => 99
 ```
 
-```#file``` command and ```#reconnect``` option provide you rapid try-and-test cycle.
+```#load```/```#file``` command and ```#reconnect``` option provide you rapid try-and-test cycle.
 
 # Related articles
 ##My blog post:
