@@ -59,6 +59,7 @@ extern "C"
 byte g_byteCodeBuf[2048];
 mrb_state *mrb;
 size_t total_allocated_mem = 0;
+bool first_command = true;
 
 //required to link with mruby-arduino
 void __dummy(){
@@ -222,7 +223,11 @@ void readEvalPrint(){
 
   //evaluate the bytecode
   mrb_value result;
-  result = mrb_run(mrb, proc, mrb_top_self(mrb));
+  
+  int nregs = first_command ? 0 : proc->body.irep->nregs;
+  if (first_command) first_command = false;
+  result = mrb_context_run(mrb, proc, mrb_top_self(mrb), nregs);
+
 
   DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
 
