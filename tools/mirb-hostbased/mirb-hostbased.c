@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#include <signal.h>
 
 #include <mruby.h>
 #include "mruby/array.h"
@@ -34,6 +35,8 @@
 static const char *history_file = ".mirb-hostbased_history";
 #endif
 char history_path[1024];
+
+int g_continue_view;
 
 /* Guess if the user might want to enter more
  * or if he wants an evaluation of his code now */
@@ -441,6 +444,12 @@ reconnect(const char *port, int *fd)
   return 0;
 }
 
+void
+sigint_handler(int sig)
+{
+  g_continue_view = 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -617,6 +626,43 @@ main(int argc, char **argv)
         }
       }
       else{
+        strcat(ruby_code, "\n");
+        strcat(ruby_code, last_code_line);
+      }
+    }else if (strncmp(last_code_line, "#view", strlen("#view")) == 0){
+      if (!code_block_open){
+        //view mode
+        printf("...Entering view mode.. press Ctrl-C to back to REPL...\n");
+        g_continue_view = 1;
+
+        if (SIG_ERR == signal(SIGINT, sigint_handler)){
+          printf("failed to set signal handler");
+          continue;
+        }
+
+        while(g_continue_view){
+          char c;
+          ssize_t ret = read(fd_port, &c, 1);
+          if (ret == 1){
+            putc(c,stdout);
+            continue;
+          }else if (ret > 0){
+            printf("ret = %zd\n", ret);
+          }else{    //need strick check. currently assume EAGAIN or EWOULDBLOCK
+            if ((errno != EAGAIN) && (errno != EWOULDBLOCK)){
+              printf("oops, something bad happen");
+              continue;
+            }
+          }
+        }
+        printf("\n...get back to REPL\n");
+        signal(SIGINT, SIG_DFL);  //restore default handler
+
+        ruby_code[0] = '\0';
+        last_code_line[0] = '\0';
+        continue;
+
+      }else{
         strcat(ruby_code, "\n");
         strcat(ruby_code, last_code_line);
       }

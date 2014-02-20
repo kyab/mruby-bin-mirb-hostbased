@@ -19,7 +19,8 @@
 #include "mruby/proc.h"
 
 extern "C" {
-extern void codedump_all(mrb_state *mrb, struct RProc *proc);
+  //use unofficial function for verbose mode 
+  extern void mrb_codedump_all(mrb_state *mrb, struct RProc *proc);
 }
 
 #ifdef MPIDE
@@ -60,6 +61,7 @@ byte g_byteCodeBuf[2048];
 mrb_state *mrb;
 size_t total_allocated_mem = 0;
 bool first_command = true;
+const int PIN_GO = 2;
 
 //required to link with mruby-arduino
 void __dummy(){
@@ -150,9 +152,10 @@ bool readByteCode(byte *buffer, int *len, int *verbose){
   return true;
 }
 
-void writeResult(const char *resultStr, int isException){
+//accept non-null-terminated string
+void writeResult(const char *result, size_t len, int isException){
 
-	unsigned short lenToWrite = (unsigned short)strlen(resultStr) + 1;
+	unsigned short lenToWrite = (unsigned short)len;
 	byte lengthH = (byte)(lenToWrite >> 8);
 	byte lengthL = (byte)(lenToWrite & 0xFF);
 
@@ -167,7 +170,7 @@ void writeResult(const char *resultStr, int isException){
 	unsigned short lenWritten = 0;
 	while(lenWritten < lenToWrite){
 		for (int i = 0 ; i < 100 ;i++){
-			Serial.write((byte)resultStr[lenWritten]);
+			Serial.write((byte)result[lenWritten]);
 			lenWritten++;
 			if (lenWritten == lenToWrite){
 				break;
@@ -176,6 +179,10 @@ void writeResult(const char *resultStr, int isException){
 		if (!waitForReadAvailable()) return;
 		Serial.read();		//must be a '#'
 	}
+}
+
+void writeResultStr(const char *resultStr, int isException){
+  writeResult(resultStr, strlen(resultStr), isException);
 }
 
 int ai;
@@ -187,6 +194,8 @@ void setup(){
   ai = mrb_gc_arena_save(mrb);
 
   reportMem();
+
+  digitalWrite(PIN_GO, INPUT);
 
 #ifdef MPIDE
   Serial.write((byte)0x06);   //ACK witout ENQ
@@ -210,7 +219,7 @@ void readEvalPrint(){
   struct mrb_irep *irep = mrb_read_irep_file(mrb, fp);
   if (!irep) {
     const char *resultStr = "(target):illegal bytecode.";
-    writeResult(resultStr, 1);
+    writeResultStr(resultStr, 1);
     return;
   }
   fclose(fp);
@@ -219,7 +228,7 @@ void readEvalPrint(){
   struct RProc *proc;
   proc = mrb_proc_new(mrb, irep);
   mrb_irep_decref(mrb, irep);
-  if (verbose) codedump_all(mrb, proc);
+  if (verbose) mrb_codedump_all(mrb, proc);
 
   //evaluate the bytecode
   mrb_value result;
@@ -231,8 +240,8 @@ void readEvalPrint(){
 
   DPRINTF("mrb_run done. exception = %d\n", (int)mrb->exc);
 
-  mrb_value result_str;
   //prepare inspected string from result
+  mrb_value result_str;
   int exeption_on_run = mrb->exc? 1: 0;
   if (exeption_on_run){
     result_str = mrb_funcall(mrb, mrb_obj_value(mrb->exc),"inspect",0);
@@ -248,16 +257,16 @@ void readEvalPrint(){
   }
 
   if (mrb->exc == 0) {
-    DPRINTF("inspected result:%s\n", RSTRING_PTR(result_str));
+    DPRINTF("inspected result:%s\n", mrb_str_to_cstr(mrb, result_str));
   }
 
   //write result string back to host
   if (mrb->exc){  //failed to inspect
     mrb->exc = 0;
     const char *msg = "(target):too low memory to return anything.";
-    writeResult(msg, 1);
+    writeResultStr(msg, 1);
   }else{
-    writeResult(RSTRING_PTR(result_str), exeption_on_run);
+    writeResult(RSTRING_PTR(result_str), RSTRING_LEN(result_str), exeption_on_run);
     mrb_gc_mark_value(mrb, result_str);
   }
 
@@ -266,7 +275,19 @@ void readEvalPrint(){
 
 }
 
+
+void call_toplevel_go(){
+  //printf("going to call go\n");
+  mrb_funcall(mrb, mrb_top_self(mrb), "go", 0);
+  //printf("going to call go done\n");
+}
+
 void loop(){
+
+  if(digitalRead(PIN_GO) == 1){
+    call_toplevel_go();
+    delay(1000);
+  }
 
   if (Serial.available() > 0 ){
     readEvalPrint();
