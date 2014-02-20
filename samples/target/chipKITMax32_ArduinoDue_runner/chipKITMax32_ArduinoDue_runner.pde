@@ -61,7 +61,6 @@ byte g_byteCodeBuf[2048];
 mrb_state *mrb;
 size_t total_allocated_mem = 0;
 bool first_command = true;
-const int PIN_GO = 2;
 
 //required to link with mruby-arduino
 void __dummy(){
@@ -195,8 +194,6 @@ void setup(){
 
   reportMem();
 
-  digitalWrite(PIN_GO, INPUT);
-
 #ifdef MPIDE
   Serial.write((byte)0x06);   //ACK witout ENQ
 #endif
@@ -275,19 +272,7 @@ void readEvalPrint(){
 
 }
 
-
-void call_toplevel_go(){
-  //printf("going to call go\n");
-  mrb_funcall(mrb, mrb_top_self(mrb), "go", 0);
-  //printf("going to call go done\n");
-}
-
 void loop(){
-
-  if(digitalRead(PIN_GO) == 1){
-    call_toplevel_go();
-    delay(1000);
-  }
 
   if (Serial.available() > 0 ){
     readEvalPrint();
